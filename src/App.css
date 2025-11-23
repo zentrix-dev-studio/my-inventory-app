@@ -1,38 +1,241 @@
-.App {
-  text-align: center;
+/* ==============================
+   GLOBAL STYLES
+============================== */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  /* background-color: #000; */
+  /* color: white; */
+  margin: 0;
+  padding: 0;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+/* ==============================
+   GLOBAL
+============================== */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f4f5f7;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+h2 {
+  color: #343a40;
+  font-weight: 600;
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+/* Full height setup */
+
+/* Main wrapping layout */
+.app-layout {
+  display: flex;
+  height: 100vh;
+  /* full height */
+  overflow: hidden;
+}
+
+/* Right content area (header + page content + footer) */
+.main-area {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  flex: 1;
+  height: 100%;
 }
 
-.App-link {
-  color: #61dafb;
+/* Page content expands and pushes footer to bottom */
+.content-area {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background: #f5f6fa;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
+
+/* ==============================
+   NAVBAR
+============================== */
+.custom-navbar {
+  background: linear-gradient(90deg, #007bff, #6610f2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.custom-navbar .navbar-brand {
+  font-weight: 700;
+  font-size: 1.6rem;
+  color: #fff !important;
+}
+
+.custom-navbar .nav-link {
+  color: #fff !important;
+  font-weight: 500;
+  margin-left: 15px;
+  transition: 0.3s;
+}
+
+.custom-navbar .nav-link:hover {
+  color: #ffc107 !important;
+}
+
+/* =======================
+   SIDEBAR STYLING
+======================= */
+
+.sidebar {
+  width: 220px;
+  height: 100vh;
+  background-color: #1f1f1f;
+  color: #fff;
+  padding: 25px 20px;
+  position: fixed;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar h3 {
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+/* Sidebar links */
+.sidebar-link {
+  display: block;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  text-decoration: none;
+  color: #ccc;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  font-size: 16px;
+  transition: all 0.3s ease;
+}
+
+/* Hover effect */
+.sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  text-decoration: none;
+}
+
+/* Active Link Highlight */
+.sidebar-link.active {
+  background: #0d6efd;
+  color: #fff !important;
+  font-weight: 600;
+  box-shadow: 0 0 8px rgba(13, 110, 253, 0.6);
+}
+
+/* ==============================
+   FOOTER
+============================== */
+.footer {
+  background-color: #343a40;
+  color: #fff;
+  font-size: 0.9rem;
+  width: 100%;
+}
+
+/* ==============================
+   PRODUCT CARD
+============================== */
+.product-card {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.product-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.product-card .card-title {
+  font-weight: bold;
+  color: #007bff;
+}
+
+.product-card .card-text {
+  color: #6c757d;
+}
+
+.product-card .btn {
+  border-radius: 8px;
+}
+
+/* ==============================
+   MODAL
+============================== */
+.modal-header-custom {
+  background-color: #007bff;
+  color: #fff;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+}
+
+.modal-footer .btn-primary {
+  border-radius: 8px;
+}
+
+/* ==============================
+   BUTTONS
+============================== */
+.btn-success {
+  border-radius: 8px;
+  transition: 0.3s;
+}
+
+.btn-success:hover {
+  background-color: #218838;
+}
+
+.btn-danger {
+  border-radius: 8px;
+  transition: 0.3s;
+}
+
+.btn-danger:hover {
+  background-color: #c82333;
+}
+
+/* ==============================
+   LAYOUT
+============================== */
+.d-flex {
+  display: flex !important;
+}
+
+.flex-grow-1 {
+  flex-grow: 1;
+}
+
+.mt-auto {
+  margin-top: auto;
+}
+
+/* Product grid spacing */
+.row {
+  margin-left: -10px;
+  margin-right: -10px;
+}
+
+.row>[class*='col-'] {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .custom-navbar .navbar-brand {
+    font-size: 1.3rem;
   }
-  to {
-    transform: rotate(360deg);
+
+  h2 {
+    font-size: 1.4rem;
   }
 }
