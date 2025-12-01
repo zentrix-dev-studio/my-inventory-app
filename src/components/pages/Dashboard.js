@@ -4,18 +4,24 @@ import { Modal, Button, Table, Form, Toast, ToastContainer, Badge, Card, Row, Co
 const MAN_WEIGHT = 40;  // Weight of one man in kg
 
 // Stock Payment Analytics Component
-const StockPaymentAnalytics = ({ products }) => {
+const StockPaymentAnalytics = ({ products = [] }) => {
   const calculateStockValue = () => {
     let totalStockValue = 0;
     let totalSalesValue = 0;
 
-    products.forEach(product => {
-      product.variants.forEach(variant => {
-        const stockValue = variant.stock * (variant.pricePerKg || variant.price || 0);
-        totalStockValue += stockValue;
-        totalSalesValue += (variant.sales || 0) * (variant.pricePerKg || variant.price || 0);
+    // Add null checks for products and variants
+    if (products && products.length > 0) {
+      products.forEach(product => {
+        if (product.variants && product.variants.length > 0) {
+          product.variants.forEach(variant => {
+            const price = variant.pricePerKg || variant.price || 0;
+            const stockValue = (variant.stock || 0) * price;
+            totalStockValue += stockValue;
+            totalSalesValue += ((variant.sales || 0) * price);
+          });
+        }
       });
-    });
+    }
 
     return { totalStockValue, totalSalesValue };
   };
@@ -36,7 +42,9 @@ const StockPaymentAnalytics = ({ products }) => {
             <div className="d-flex justify-content-between align-items-center p-3 border rounded mb-3">
               <div>
                 <h6 className="text-muted mb-1">Total Stock Value</h6>
-                <h4 className="text-primary fw-bold mb-0">PKR {totalStockValue.toFixed(2)}</h4>
+                <h4 className="text-primary fw-bold mb-0">
+                  PKR {(totalStockValue || 0).toFixed(2)}
+                </h4>
               </div>
               <i className="bi bi-box-seam display-6 text-primary"></i>
             </div>
@@ -45,7 +53,9 @@ const StockPaymentAnalytics = ({ products }) => {
             <div className="d-flex justify-content-between align-items-center p-3 border rounded mb-3">
               <div>
                 <h6 className="text-muted mb-1">Total Sales Value</h6>
-                <h4 className="text-success fw-bold mb-0">PKR {totalSalesValue.toFixed(2)}</h4>
+                <h4 className="text-success fw-bold mb-0">
+                  PKR {(totalSalesValue || 0).toFixed(2)}
+                </h4>
               </div>
               <i className="bi bi-graph-up display-6 text-success"></i>
             </div>
@@ -67,10 +77,10 @@ const StockPaymentAnalytics = ({ products }) => {
               </tr>
             </thead>
             <tbody>
-              {products.map(product =>
-                product.variants.map((variant, idx) => {
-                  const stockValue = variant.stock * (variant.pricePerKg || variant.price || 0);
-                  const salesTrend = variant.sales > 0 ? "positive" : "neutral";
+              {products && products.length > 0 ? products.map(product =>
+                product.variants && product.variants.map((variant, idx) => {
+                  const stockValue = (variant.stock || 0) * (variant.pricePerKg || variant.price || 0);
+                  const salesTrend = (variant.sales || 0) > 0 ? "positive" : "neutral";
 
                   return (
                     <tr key={`${product.id}-${idx}`}>
@@ -80,11 +90,11 @@ const StockPaymentAnalytics = ({ products }) => {
                           {variant.variantName}
                         </Badge>
                       </td>
-                      <td>{variant.stock} kg</td>
+                      <td>{(variant.stock || 0)} kg</td>
                       <td className="text-success fw-semibold">
                         PKR {variant.pricePerKg || variant.price || 0}
                       </td>
-                      <td className="fw-bold">PKR {stockValue.toFixed(2)}</td>
+                      <td className="fw-bold">PKR {(stockValue || 0).toFixed(2)}</td>
                       <td>
                         <Badge bg={salesTrend === "positive" ? "success" : "secondary"}>
                           <i className={`bi ${salesTrend === "positive" ? "bi-arrow-up" : "bi-dash"} me-1`}></i>
@@ -94,6 +104,14 @@ const StockPaymentAnalytics = ({ products }) => {
                     </tr>
                   );
                 })
+              ) : (
+                <tr>
+                  <td colSpan="6" className="text-center py-4">
+                    <i className="bi bi-inbox display-6 text-muted mb-3"></i>
+                    <h5 className="text-muted">No products available</h5>
+                    <p className="text-muted">Add products to see analytics</p>
+                  </td>
+                </tr>
               )}
             </tbody>
           </Table>
@@ -137,16 +155,21 @@ const Dashboard = () => {
   const [newProductName, setNewProductName] = useState("");
   const [newProductCategory, setNewProductCategory] = useState("");
   const [newVariantName, setNewVariantName] = useState("");
-  const [storedProducts, setStoredProducts] = useState([]); // Store multiple products temporarily
-  
+  const [storedProducts, setStoredProducts] = useState([]);
+
   // Enhanced Internal Purchase States
   const [pricingMethod, setPricingMethod] = useState("average");
   const [customPricePerMan, setCustomPricePerMan] = useState(0);
   const [customPricePerKg, setCustomPricePerKg] = useState(0);
 
   // Add these with your other state declarations
-const [showSourceDetailsModal, setShowSourceDetailsModal] = useState(false);
-const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
+  const [showSourceDetailsModal, setShowSourceDetailsModal] = useState(false);
+  const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
+
+  // Add these with your other state declarations
+  const [showEditInternalPurchaseModal, setShowEditInternalPurchaseModal] = useState(false);
+  const [editingInternalPurchaseIndex, setEditingInternalPurchaseIndex] = useState(null);
+  const [editInternalPurchaseData, setEditInternalPurchaseData] = useState(null);
 
   useEffect(() => {
     const storedProducts = JSON.parse(localStorage.getItem("products")) || [];
@@ -174,23 +197,60 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
     setRecentSales(storedSales);
   }, []);
 
-  // Auto-calculate price per kg when price per man changes
-  useEffect(() => {
-    if (sellingPricePerMan > 0) {
-      const calculatedPricePerKg = Math.round(sellingPricePerMan / MAN_WEIGHT);
-      setSellingPricePerKg(calculatedPricePerKg);
+  // Quantity input handlers
+  const handleQuantityInputFocus = (e) => {
+    if (e.target.value === '0') {
+      e.target.value = '';
     }
-  }, [sellingPricePerMan]);
+  };
 
-  // Auto-calculate price per man when price per kg changes
-  useEffect(() => {
-    if (sellingPricePerKg > 0) {
-      const calculatedPricePerMan = Math.round(sellingPricePerKg * MAN_WEIGHT);
-      setSellingPricePerMan(calculatedPricePerMan);
+  const handleQuantityInputBlur = (e, setterFunction) => {
+    if (e.target.value === '') {
+      setterFunction(0);
     }
-  }, [sellingPricePerKg]);
+  };
 
-  const checkLowStock = (productList) => {
+  const handleQuantityChange = (e, setterFunction) => {
+    const value = parseInt(e.target.value) || 0;
+    setterFunction(value);
+  };
+
+  // Price input handlers
+  const handlePriceInputFocus = (e) => {
+    if (e.target.value === '0') {
+      e.target.value = '';
+    }
+  };
+
+  const handlePriceInputBlur = (e, setterFunction) => {
+    if (e.target.value === '') {
+      setterFunction(0);
+    }
+  };
+
+  const handlePriceChange = (e, setterFunction, calculationType = null) => {
+    const value = parseInt(e.target.value) || 0;
+    setterFunction(value);
+
+    // Auto calculations
+    if (value > 0) {
+      if (calculationType === 'manToKg') {
+        const calculatedPricePerKg = Math.round(value / MAN_WEIGHT);
+        setSellingPricePerKg(calculatedPricePerKg);
+      } else if (calculationType === 'kgToMan') {
+        const calculatedPricePerMan = Math.round(value * MAN_WEIGHT);
+        setSellingPricePerMan(calculatedPricePerMan);
+      }
+    }
+  };
+
+  // For internal purchase custom prices
+  const handleCustomPriceChange = (e, setterFunction) => {
+    const value = parseInt(e.target.value) || 0;
+    setterFunction(value);
+  };
+
+  const checkLowStock = (productList = []) => {
     const lowStock = productList.filter(p =>
       p.variants && p.variants.some(v => v.stock < 10)
     ).map(p => p.id);
@@ -226,8 +286,8 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
     setShowToast(true);
   };
 
-  const categories = ["Comission Shop", "Cattle Field"];
-  const filteredProducts = products.filter(p => p.category === selectedCategory);
+  const categories = ["Commission Shop", "Cattle Field"];
+  const filteredProducts = products ? products.filter(p => p.category === selectedCategory) : [];
 
   const handleCardClick = (category) => {
     setSelectedCategory(category);
@@ -240,36 +300,71 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
       return;
     }
 
+    // Additional protection
+    if (selectedVariantIndex === null || !selectedProduct.variants || !selectedProduct.variants[selectedVariantIndex]) {
+      showToastMessage("Please select a valid variant", "warning");
+      return;
+    }
+
     const variant = selectedProduct.variants[selectedVariantIndex];
 
+    // Calculate selling quantity in kg
     const sellingKg = quantityMan * MAN_WEIGHT + quantityKg;
-    const currentTotalKg = variant.man * MAN_WEIGHT + variant.kg;
 
     if (sellingKg <= 0) {
       showToastMessage("Enter a valid quantity", "warning");
       return;
     }
 
+    // Get current total stock in kg
+    const currentTotalKg = variant.man * MAN_WEIGHT + variant.kg;
+
     if (sellingKg > currentTotalKg) {
       showToastMessage("Not enough stock for this variant", "danger");
       return;
     }
 
-    // Calculate remaining stock in kg
-    const remainingKg = currentTotalKg - sellingKg;
+    // If editing existing sale, first restore the old stock
+    let updatedProducts = [...products];
+    if (editingSaleIndex !== null) {
+      const oldSale = recentSales[editingSaleIndex];
+      const oldSellingKg = oldSale.quantityMan * MAN_WEIGHT + oldSale.quantityKg;
 
-    // Convert remaining kg back to man + kg format
+      // Find the product and variant to restore stock
+      const productToUpdate = updatedProducts.find(p => p.name === oldSale.productName);
+      if (productToUpdate) {
+        const variantToUpdate = productToUpdate.variants.find(v => v.variantName === oldSale.variantName);
+        if (variantToUpdate) {
+          // Restore the old stock
+          const restoredKg = oldSellingKg;
+          const currentKgBeforeRestore = variantToUpdate.man * MAN_WEIGHT + variantToUpdate.kg;
+          const newTotalKgAfterRestore = currentKgBeforeRestore + restoredKg;
+
+          const newMan = Math.floor(newTotalKgAfterRestore / MAN_WEIGHT);
+          const newKg = newTotalKgAfterRestore % MAN_WEIGHT;
+
+          variantToUpdate.man = newMan;
+          variantToUpdate.kg = newKg;
+          variantToUpdate.stock = newTotalKgAfterRestore;
+          variantToUpdate.unit = `${newMan} Man + ${newKg} Kg`;
+          variantToUpdate.sales = Math.max(0, (variantToUpdate.sales || 0) - oldSellingKg);
+        }
+      }
+    }
+
+    // Now apply the new sale (subtract new quantity)
+    const remainingKg = currentTotalKg - sellingKg;
     const remainingMan = Math.floor(remainingKg / MAN_WEIGHT);
     const remainingKgOnly = remainingKg % MAN_WEIGHT;
 
     // Update the variant with new man, kg, stock, and unit
     variant.man = remainingMan;
     variant.kg = remainingKgOnly;
-    variant.stock = remainingKg; // Total stock in kg
+    variant.stock = remainingKg;
     variant.unit = `${remainingMan} Man + ${remainingKgOnly} Kg`;
     variant.sales = (variant.sales || 0) + sellingKg;
 
-    const updatedProducts = products.map(p =>
+    updatedProducts = updatedProducts.map(p =>
       p.id === selectedProduct.id ? selectedProduct : p
     );
 
@@ -278,7 +373,12 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
       toastVariant = "warning";
     }
 
-    saveProducts(updatedProducts, `Sold ${quantityMan} man and ${quantityKg} kg of ${selectedProduct.name}`, toastVariant);
+    saveProducts(updatedProducts,
+      editingSaleIndex !== null
+        ? `Updated sale for ${selectedProduct.name}`
+        : `Sold ${quantityMan} man and ${quantityKg} kg of ${selectedProduct.name}`,
+      toastVariant
+    );
 
     // Calculate total amount and profit
     const totalAmount = (quantityMan * sellingPricePerMan) + (quantityKg * sellingPricePerKg);
@@ -287,6 +387,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
 
     const newSale = {
       productName: selectedProduct.name,
+      productId: selectedProduct.id,
       variantName: variant.variantName,
       quantityMan,
       quantityKg,
@@ -300,7 +401,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
       sellingPricePerKg,
       totalAmount,
       profit: totalProfit,
-      date: new Date().toLocaleString(),
+      date: editingSaleIndex !== null ? recentSales[editingSaleIndex].date : new Date().toLocaleString(),
       type: "sale"
     };
 
@@ -308,11 +409,10 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
     if (editingSaleIndex !== null) {
       updatedSales = [...recentSales];
       updatedSales[editingSaleIndex] = newSale;
-      setEditingSaleIndex(null);
-      showToastMessage("Sale record updated", "success");
+      showToastMessage("Sale record updated successfully", "success");
     } else {
       updatedSales = [newSale, ...recentSales];
-      showToastMessage("Sale record added", "success");
+      showToastMessage("Sale record added successfully", "success");
     }
 
     saveRecentSales(updatedSales);
@@ -325,24 +425,80 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
     setQuantityKg(0);
     setSellingPricePerMan(0);
     setSellingPricePerKg(0);
+    setEditingSaleIndex(null);
   };
 
   const handleEditSale = (index) => {
     const sale = recentSales[index];
-    setEditingSaleIndex(index);
 
-    const product = products.find(p => p.name === sale.productName);
-    const variantIndex = product ? product.variants.findIndex(v => v.variantName === sale.variantName) : 0;
+    // Find the product by ID first, then by name
+    let product = null;
 
-    setSelectedProduct(product);
-    setSelectedVariantIndex(variantIndex);
+    // If sale has productId, use that
+    if (sale.productId) {
+      product = products.find(p => p.id === sale.productId);
+    }
+
+    // If not found by ID, try by name
+    if (!product) {
+      product = products.find(p =>
+        p.name.trim().toLowerCase() === sale.productName.trim().toLowerCase()
+      );
+    }
+
+    if (!product) {
+      showToastMessage(`Product "${sale.productName}" not found in current inventory`, "warning");
+      setSelectedProduct(null);
+      setSelectedVariantIndex(null);
+    } else {
+      const variantIndex = product.variants.findIndex(v =>
+        v.variantName.trim().toLowerCase() === sale.variantName.trim().toLowerCase()
+      );
+
+      if (variantIndex === -1) {
+        showToastMessage(`Variant "${sale.variantName}" not found`, "warning");
+        setSelectedProduct(product);
+        setSelectedVariantIndex(0);
+      } else {
+        setSelectedProduct(product);
+        setSelectedVariantIndex(variantIndex);
+      }
+    }
+
+    // Always set the sale quantities and prices
     setQuantityMan(sale.quantityMan || 0);
     setQuantityKg(sale.quantityKg || 0);
     setSellingPricePerMan(sale.sellingPricePerMan || 0);
     setSellingPricePerKg(sale.sellingPricePerKg || 0);
+    setEditingSaleIndex(index);
     setShowSalesModal(true);
   };
 
+  // Edit Internal Purchase Function
+  const handleEditInternalPurchase = (index) => {
+    const internalPurchase = recentSales[index];
+    setEditingInternalPurchaseIndex(index);
+    setEditInternalPurchaseData(internalPurchase);
+    setShowEditInternalPurchaseModal(true);
+  };
+
+  // Update Internal Purchase Function
+  const handleUpdateInternalPurchase = () => {
+    if (!editInternalPurchaseData) return;
+
+    const updatedSales = [...recentSales];
+    updatedSales[editingInternalPurchaseIndex] = {
+      ...editInternalPurchaseData,
+      date: new Date().toLocaleString()
+    };
+
+    saveRecentSales(updatedSales, "Internal purchase updated successfully", "success");
+    setShowEditInternalPurchaseModal(false);
+    setEditingInternalPurchaseIndex(null);
+    setEditInternalPurchaseData(null);
+  };
+
+  // Enhanced Delete Function (Both Sales and Internal Purchases)
   const handleDeleteSale = (index) => {
     setDeleteSaleIndex(index);
     setShowDeleteSaleModal(true);
@@ -351,11 +507,27 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
   const confirmDeleteSale = () => {
     const updatedSales = [...recentSales];
     const sale = updatedSales[deleteSaleIndex];
+
+    if (sale.isInternalPurchase) {
+      // Handle internal purchase deletion - restore source products stock
+      handleDeleteInternalPurchase(sale);
+    } else {
+      // Handle regular sale deletion - restore product stock
+      handleDeleteRegularSale(sale);
+    }
+
+    updatedSales.splice(deleteSaleIndex, 1);
+    saveRecentSales(updatedSales, "Record deleted successfully");
+    setShowDeleteSaleModal(false);
+    setDeleteSaleIndex(null);
+  };
+
+  // Delete Regular Sale (Stock Restoration)
+  const handleDeleteRegularSale = (sale) => {
     const product = products.find(p => p.name === sale.productName);
     const variant = product?.variants.find(v => v.variantName === sale.variantName);
 
     if (variant) {
-      // Restore the stock when deleting a sale
       const restoredKg = sale.quantityMan * MAN_WEIGHT + sale.quantityKg;
       const currentTotalKg = variant.man * MAN_WEIGHT + variant.kg;
       const newTotalKg = currentTotalKg + restoredKg;
@@ -374,11 +546,46 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
       );
       saveProducts(updatedProducts);
     }
+  };
 
-    updatedSales.splice(deleteSaleIndex, 1);
-    saveRecentSales(updatedSales, "Sale record deleted");
-    setShowDeleteSaleModal(false);
-    setDeleteSaleIndex(null);
+  // Delete Internal Purchase (Restore Source Products)
+  const handleDeleteInternalPurchase = (internalPurchase) => {
+    const updatedProducts = [...products];
+
+    // Find and delete the final product
+    const finalProductIndex = updatedProducts.findIndex(p =>
+      p.name === internalPurchase.productName &&
+      p.variants.some(v => v.variantName === internalPurchase.variantName)
+    );
+
+    if (finalProductIndex !== -1) {
+      updatedProducts.splice(finalProductIndex, 1);
+    }
+
+    // Restore stock to source products
+    if (internalPurchase.sourceProducts) {
+      internalPurchase.sourceProducts.forEach(sourceItem => {
+        const sourceProduct = updatedProducts.find(p => p.name === sourceItem.sourceProductName);
+        if (sourceProduct) {
+          const sourceVariant = sourceProduct.variants.find(v => v.variantName === sourceItem.sourceVariantName);
+          if (sourceVariant) {
+            const restoredKg = sourceItem.quantityMan * MAN_WEIGHT + sourceItem.quantityKg;
+            const currentTotalKg = sourceVariant.man * MAN_WEIGHT + sourceVariant.kg;
+            const newTotalKg = currentTotalKg + restoredKg;
+
+            const newMan = Math.floor(newTotalKg / MAN_WEIGHT);
+            const newKg = newTotalKg % MAN_WEIGHT;
+
+            sourceVariant.man = newMan;
+            sourceVariant.kg = newKg;
+            sourceVariant.stock = newTotalKg;
+            sourceVariant.unit = `${newMan} Man + ${newKg} Kg`;
+          }
+        }
+      });
+    }
+
+    saveProducts(updatedProducts);
   };
 
   const handleCancelOrder = () => setShowCancelModal(true);
@@ -391,7 +598,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
 
   // Helper function to get available stock for display
   const getAvailableStockDisplay = (variant) => {
-    if (!variant) return "0 kg";
+    if (!variant || variant.stock === undefined) return "0 kg";
     const totalKg = variant.man * MAN_WEIGHT + variant.kg;
     return `${variant.man} Man + ${variant.kg} Kg (${totalKg} kg total)`;
   };
@@ -466,19 +673,19 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
 
   // Helper functions for price calculation
   const calculateAveragePricePerMan = () => {
-    if (storedProducts.length === 0) return 0;
+    if (!storedProducts || storedProducts.length === 0) return 0;
     const totalMan = storedProducts.reduce((sum, item) => sum + item.man, 0);
     if (totalMan === 0) return 0;
-    
+
     const totalCost = storedProducts.reduce((sum, item) => sum + (item.man * item.pricePerMan), 0);
     return Math.round(totalCost / totalMan);
   };
 
   const calculateAveragePricePerKg = () => {
-    if (storedProducts.length === 0) return 0;
+    if (!storedProducts || storedProducts.length === 0) return 0;
     const totalKg = storedProducts.reduce((sum, item) => sum + item.totalKg, 0);
     if (totalKg === 0) return 0;
-    
+
     const totalCost = storedProducts.reduce((sum, item) => sum + (item.kg * item.pricePerKg), 0);
     return Math.round(totalCost / totalKg);
   };
@@ -513,9 +720,9 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
     }
   };
 
-  // Create final product from all items - UPDATED VERSION
+  // Create final product from all items
   const handleCreateFinalProduct = () => {
-    if (!newProductName || !newProductCategory || storedProducts.length === 0) {
+    if (!newProductName || !newProductCategory || !storedProducts || storedProducts.length === 0) {
       showToastMessage("Please fill all required fields and add at least one item", "warning");
       return;
     }
@@ -524,7 +731,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
     for (const item of storedProducts) {
       const sourceProduct = products.find(p => p.id === item.sourceProductId);
       const sourceVariant = sourceProduct?.variants.find(v => v.variantName === item.sourceVariantName);
-      
+
       if (!sourceVariant) {
         showToastMessage(`Source product not found for item: ${item.sourceProductName}`, "danger");
         return;
@@ -540,19 +747,19 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
     // Update stock for all source products and calculate total cost
     const updatedProducts = [...products];
     let totalPurchaseCost = 0;
-    
+
     storedProducts.forEach(item => {
       const sourceProductIndex = updatedProducts.findIndex(p => p.id === item.sourceProductId);
       if (sourceProductIndex !== -1) {
         const sourceVariantIndex = updatedProducts[sourceProductIndex].variants.findIndex(
           v => v.variantName === item.sourceVariantName
         );
-        
+
         if (sourceVariantIndex !== -1) {
           const sourceVariant = updatedProducts[sourceProductIndex].variants[sourceVariantIndex];
           const currentTotalKg = sourceVariant.man * MAN_WEIGHT + sourceVariant.kg;
           const remainingKg = currentTotalKg - item.totalKg;
-          
+
           const remainingMan = Math.floor(remainingKg / MAN_WEIGHT);
           const remainingKgOnly = remainingKg % MAN_WEIGHT;
 
@@ -601,8 +808,8 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
     };
 
     updatedProducts.push(finalProduct);
-    
-    // Create Internal Purchase Sale Record - NEW CODE
+
+    // Create Internal Purchase Sale Record
     const internalPurchaseSale = {
       productName: newProductName,
       variantName: newVariantName || "Default",
@@ -612,12 +819,12 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
       unit: `${storedProducts.reduce((total, item) => total + item.man, 0)} Man + ${storedProducts.reduce((total, item) => total + item.kg, 0)} Kg`,
       costPricePerMan: finalPrices.pricePerMan,
       costPricePerKg: finalPrices.pricePerKg,
-      sellingPricePerMan: 0, // Internal purchase has no selling price
+      sellingPricePerMan: 0,
       sellingPricePerKg: 0,
       totalAmount: totalPurchaseCost,
-      profit: 0, // Internal purchase profit is 0
+      profit: 0,
       date: new Date().toLocaleString(),
-      type: "internal_purchase", // Mark as internal purchase
+      type: "internal_purchase",
       sourceProducts: storedProducts.map(item => ({
         sourceProductName: item.sourceProductName,
         sourceVariantName: item.sourceVariantName,
@@ -626,7 +833,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
         costPerMan: item.pricePerMan,
         costPerKg: item.pricePerKg
       })),
-      isInternalPurchase: true // Flag to identify internal purchases
+      isInternalPurchase: true
     };
 
     // Add to recent sales
@@ -634,7 +841,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
     saveRecentSales(updatedSales, `Internal purchase recorded for "${newProductName}"`, "success");
 
     saveProducts(updatedProducts, `Created new product "${newProductName}" from ${storedProducts.length} source items`, "success");
-    
+
     // Reset everything
     setStoredProducts([]);
     setShowInternalPurchaseModal(false);
@@ -658,15 +865,15 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
     return variant.stock < 10;
   };
 
-  // Calculate dashboard statistics
-  const totalProducts = products.length;
-  const totalLowStockProducts = lowStockProducts.length;
-  const totalSales = recentSales.length;
-  const totalRevenue = recentSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
-  const totalProfit = recentSales.reduce((sum, sale) => sum + sale.profit, 0);
+  // Calculate dashboard statistics with proper null checks
+  const totalProducts = products ? products.length : 0;
+  const totalLowStockProducts = lowStockProducts ? lowStockProducts.length : 0;
+  const totalSales = recentSales ? recentSales.length : 0;
+  const totalRevenue = recentSales ? recentSales.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0) : 0;
+  const totalProfit = recentSales ? recentSales.reduce((sum, sale) => sum + (sale.profit || 0), 0) : 0;
 
   return (
-    <div className="dashboard-container container mt-4">
+    <div className="dashboard-container khata-system">
       {/* Header */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -713,7 +920,9 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
             <Card.Body className="text-center">
               <div className="dashboard-stat-card">
                 <i className="bi bi-currency-dollar display-6 text-success mb-3"></i>
-                <h4 className="fw-bold text-success">PKR {totalRevenue.toFixed(2)}</h4>
+                <h4 className="fw-bold text-success">
+                  PKR {(totalRevenue || 0).toFixed(2)}
+                </h4>
                 <p className="text-muted mb-0">Total Revenue</p>
               </div>
             </Card.Body>
@@ -724,7 +933,9 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
             <Card.Body className="text-center">
               <div className="dashboard-stat-card">
                 <i className="bi bi-graph-up-arrow display-6 text-info mb-3"></i>
-                <h4 className="fw-bold text-info">PKR {totalProfit.toFixed(2)}</h4>
+                <h4 className="fw-bold text-info">
+                  PKR {(totalProfit || 0).toFixed(2)}
+                </h4>
                 <p className="text-muted mb-0">Total Profit</p>
               </div>
             </Card.Body>
@@ -736,9 +947,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
       <Row className="mb-5">
         <Col md={4} className="mb-3">
           <Card
-            className={`shadow-sm h-100 action-card ${categories.filter(cat =>
-              products.filter(p => p.category === cat).some(p => isProductLowStock(p))
-            ).length > 0 ? 'border-danger' : ''}`}
+            className={`shadow-sm h-100 action-card ${products && products.filter(p => p.category === categories[0]).some(p => isProductLowStock(p)) ? 'border-danger' : ''}`}
             onClick={() => handleCardClick(categories[0])}
             style={{ cursor: 'pointer' }}
           >
@@ -746,7 +955,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
               <i className="bi bi-shop display-4 text-primary mb-3"></i>
               <Card.Title className="d-flex align-items-center justify-content-center mb-3">
                 Commission Shop
-                {products.filter(p => p.category === categories[0]).some(p => isProductLowStock(p)) && (
+                {products && products.filter(p => p.category === categories[0]).some(p => isProductLowStock(p)) && (
                   <Badge bg="danger" className="ms-2">
                     <i className="bi bi-exclamation-triangle me-1"></i>
                     Low Stock
@@ -754,7 +963,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                 )}
               </Card.Title>
               <Card.Text className="text-muted">
-                {products.filter(p => p.category === categories[0]).length} products available
+                {products ? products.filter(p => p.category === categories[0]).length : 0} products available
               </Card.Text>
               <Button variant="outline-primary" size="sm">
                 View Products <i className="bi bi-arrow-right ms-1"></i>
@@ -764,9 +973,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
         </Col>
         <Col md={4} className="mb-3">
           <Card
-            className={`shadow-sm h-100 action-card ${categories.filter(cat =>
-              products.filter(p => p.category === cat).some(p => isProductLowStock(p))
-            ).length > 0 ? 'border-danger' : ''}`}
+            className={`shadow-sm h-100 action-card ${products && products.filter(p => p.category === categories[1]).some(p => isProductLowStock(p)) ? 'border-danger' : ''}`}
             onClick={() => handleCardClick(categories[1])}
             style={{ cursor: 'pointer' }}
           >
@@ -774,7 +981,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
               <i className="bi bi-tree display-4 text-success mb-3"></i>
               <Card.Title className="d-flex align-items-center justify-content-center mb-3">
                 Cattle Field
-                {products.filter(p => p.category === categories[1]).some(p => isProductLowStock(p)) && (
+                {products && products.filter(p => p.category === categories[1]).some(p => isProductLowStock(p)) && (
                   <Badge bg="danger" className="ms-2">
                     <i className="bi bi-exclamation-triangle me-1"></i>
                     Low Stock
@@ -782,7 +989,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                 )}
               </Card.Title>
               <Card.Text className="text-muted">
-                {products.filter(p => p.category === categories[1]).length} products available
+                {products ? products.filter(p => p.category === categories[1]).length : 0} products available
               </Card.Text>
               <Button variant="outline-success" size="sm">
                 View Products <i className="bi bi-arrow-right ms-1"></i>
@@ -832,289 +1039,462 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
       <StockPaymentAnalytics products={products} />
 
       {/* Recent Sales Section */}
-     {/* Recent Sales Section */}
-<Card className="shadow-sm border-0">
-  <Card.Header className="bg-white border-0 py-3">
-    <div className="d-flex justify-content-between align-items-center">
-      <h5 className="mb-0 fw-bold">
-        <i className="bi bi-clock-history me-2 text-primary"></i>
-        Recent Sales & Internal Purchases
-      </h5>
-      <Badge bg="primary" pill>
-        {recentSales.length} transactions
-      </Badge>
-    </div>
-  </Card.Header>
-  <Card.Body className="p-0">
-    {recentSales.length === 0 ? (
-      <div className="text-center py-5">
-        <i className="bi bi-receipt display-4 text-muted mb-3"></i>
-        <h5 className="text-muted">No sales recorded yet</h5>
-        <p className="text-muted">Start selling to see your transaction history</p>
-        <Button variant="primary" onClick={() => setShowSalesModal(true)}>
-          <i className="bi bi-cart-plus me-2"></i>
-          Make Your First Sale
-        </Button>
-      </div>
-    ) : (
-      <div className="table-responsive">
-        <Table hover className="mb-0">
-          <thead className="table-light">
-            <tr>
-              <th>Date & Time</th>
-              <th>Type</th>
-              <th>Product</th>
-              <th>Variant</th>
-              <th>Quantity</th>
-              <th>Total KG</th>
-              <th>Price per Man</th>
-              <th>Price per Kg</th>
-              <th>Total Amount</th>
-              <th>Profit/Loss</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recentSales.map((sale, idx) => (
-              <tr key={idx} className={sale.isInternalPurchase ? "table-info" : ""}>
-                <td>
-                  <small className="text-muted">{sale.date}</small>
-                </td>
-                <td>
-                  {sale.isInternalPurchase ? (
-                    <Badge bg="info" className="text-dark">
-                      <i className="bi bi-arrow-left-right me-1"></i>
-                      Internal Purchase
-                    </Badge>
-                  ) : (
-                    <Badge bg="success">
-                      <i className="bi bi-cart-check me-1"></i>
-                      Sale
-                    </Badge>
-                  )}
-                </td>
-                <td className="fw-semibold">
-                  {sale.productName}
-                  {sale.isInternalPurchase && sale.sourceProducts && (
-                    <div>
-                      <small className="text-muted">
-                        From: {sale.sourceProducts.map(sp => sp.sourceProductName).join(', ')}
-                      </small>
+      <Card className="shadow-sm border-0">
+        <Card.Header className="bg-white border-0 py-3">
+          <div className="d-flex justify-content-between align-items-center">
+            <h5 className="mb-0 fw-bold">
+              <i className="bi bi-clock-history me-2 text-primary"></i>
+              Recent Sales & Internal Purchases
+            </h5>
+            <Badge bg="primary" pill>
+              {recentSales ? recentSales.length : 0} transactions
+            </Badge>
+          </div>
+        </Card.Header>
+        <Card.Body className="p-0">
+          {!recentSales || recentSales.length === 0 ? (
+            <div className="text-center py-5">
+              <i className="bi bi-receipt display-4 text-muted mb-3"></i>
+              <h5 className="text-muted">No transactions recorded yet</h5>
+              <p className="text-muted">Start selling or internal purchases to see history</p>
+              <Button variant="primary" onClick={() => setShowSalesModal(true)}>
+                <i className="bi bi-cart-plus me-2"></i>
+                Make Your First Sale
+              </Button>
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <Table hover className="mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th>Date & Time</th>
+                    <th>Type</th>
+                    <th>Product</th>
+                    <th>Variant</th>
+                    <th>Quantity</th>
+                    <th>Total KG</th>
+                    <th>Price per Man</th>
+                    <th>Price per Kg</th>
+                    <th>Total Amount</th>
+                    <th>Profit/Loss</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentSales.map((sale, idx) => (
+                    <tr key={idx} className={sale.isInternalPurchase ? "table-info" : ""}>
+                      <td>
+                        <small className="text-muted">{sale.date}</small>
+                      </td>
+                      <td>
+                        {sale.isInternalPurchase ? (
+                          <Badge bg="info" className="text-dark">
+                            <i className="bi bi-arrow-left-right me-1"></i>
+                            Internal Purchase
+                          </Badge>
+                        ) : (
+                          <Badge bg="success">
+                            <i className="bi bi-cart-check me-1"></i>
+                            Sale
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="fw-semibold">
+                        {sale.productName}
+                        {sale.isInternalPurchase && sale.sourceProducts && (
+                          <div>
+                            <small className="text-muted">
+                              From: {sale.sourceProducts.map(sp => sp.sourceProductName).join(', ')}
+                            </small>
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        <Badge bg="outline-secondary" className="text-dark">
+                          {sale.variantName}
+                        </Badge>
+                      </td>
+                      <td>
+                        {sale.quantityMan > 0 && `${sale.quantityMan} Man`}
+                        {sale.quantityMan > 0 && sale.quantityKg > 0 && ' + '}
+                        {sale.quantityKg > 0 && `${sale.quantityKg} Kg`}
+                      </td>
+                      <td className="fw-semibold">{sale.quantityInKg} kg</td>
+                      <td className="text-success fw-semibold">
+                        PKR {sale.isInternalPurchase ? sale.costPricePerMan : sale.sellingPricePerMan}
+                      </td>
+                      <td className="text-success fw-semibold">
+                        PKR {sale.isInternalPurchase ? sale.costPricePerKg : sale.sellingPricePerKg}
+                      </td>
+                      <td className="text-success fw-semibold">
+                        PKR {(sale.totalAmount || 0).toFixed(2)}
+                      </td>
+                      <td>
+                        {sale.isInternalPurchase ? (
+                          <Badge bg="secondary">
+                            <i className="bi bi-dash me-1"></i>
+                            Internal
+                          </Badge>
+                        ) : (
+                          <Badge bg={(sale.profit || 0) >= 0 ? "success" : "danger"}>
+                            <i className={`bi ${(sale.profit || 0) >= 0 ? "bi-arrow-up" : "bi-arrow-down"} me-1`}></i>
+                            PKR {(sale.profit || 0).toFixed(2)}
+                          </Badge>
+                        )}
+                      </td>
+                      <td>
+                        <div className="btn-group btn-group-sm">
+                          <Button
+                            variant="outline-info"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedInternalPurchase(sale);
+                              setShowSourceDetailsModal(true);
+                            }}
+                            title="View Details"
+                          >
+                            <i className="bi bi-info-circle"></i>
+                          </Button>
+
+                          {!sale.isInternalPurchase && (
+                            <Button
+                              variant="outline-primary"
+                              size="sm"
+                              onClick={() => handleEditSale(idx)}
+                              title="Edit Sale"
+                            >
+                              <i className="bi bi-pencil"></i>
+                            </Button>
+                          )}
+
+                          {sale.isInternalPurchase && (
+                            <Button
+                              variant="outline-warning"
+                              size="sm"
+                              onClick={() => handleEditInternalPurchase(idx)}
+                              title="Edit Internal Purchase"
+                            >
+                              <i className="bi bi-pencil"></i>
+                            </Button>
+                          )}
+
+                          <Button
+                            variant="outline-danger"
+                            size="sm"
+                            onClick={() => handleDeleteSale(idx)}
+                            title="Delete Record"
+                          >
+                            <i className="bi bi-trash"></i>
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          )}
+        </Card.Body>
+      </Card>
+
+      {/* Source Products Details Modal */}
+      <Modal show={showSourceDetailsModal} onHide={() => setShowSourceDetailsModal(false)} size="lg" centered>
+        <Modal.Header closeButton className="bg-info text-white">
+          <Modal.Title>
+            <i className="bi bi-box-seam me-2"></i>
+            Source Products Details
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {selectedInternalPurchase && (
+            <>
+              <Card className="mb-4 border-primary">
+                <Card.Header className="bg-primary text-white">
+                  <h6 className="mb-0">
+                    <i className="bi bi-info-circle me-2"></i>
+                    Final Product Information
+                  </h6>
+                </Card.Header>
+                <Card.Body>
+                  <Row>
+                    <Col md={6}>
+                      <strong>Product Name:</strong> {selectedInternalPurchase.productName}
+                    </Col>
+                    <Col md={6}>
+                      <strong>Variant:</strong> {selectedInternalPurchase.variantName}
+                    </Col>
+                  </Row>
+                  <Row className="mt-2">
+                    <Col md={6}>
+                      <strong>Total Quantity:</strong> {selectedInternalPurchase.quantityMan} Man + {selectedInternalPurchase.quantityKg} Kg
+                    </Col>
+                    <Col md={6}>
+                      <strong>Total KG:</strong> {selectedInternalPurchase.quantityInKg} kg
+                    </Col>
+                  </Row>
+                  <Row className="mt-2">
+                    <Col md={6}>
+                      <strong>Total Cost:</strong> PKR {(selectedInternalPurchase.totalAmount || 0).toFixed(2)}
+                    </Col>
+                    <Col md={6}>
+                      <strong>Date Created:</strong> {selectedInternalPurchase.date}
+                    </Col>
+                  </Row>
+                </Card.Body>
+              </Card>
+
+              <h6 className="fw-bold mb-3">
+                <i className="bi bi-list-check me-2 text-primary"></i>
+                Source Products Used ({selectedInternalPurchase.sourceProducts ? selectedInternalPurchase.sourceProducts.length : 0})
+              </h6>
+
+              <div className="table-responsive">
+                <Table striped bordered hover>
+                  <thead className="table-info">
+                    <tr>
+                      <th>#</th>
+                      <th>Source Product</th>
+                      <th>Variant</th>
+                      <th>Quantity</th>
+                      <th>Total KG</th>
+                      <th>Cost per Man</th>
+                      <th>Cost per Kg</th>
+                      <th>Total Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedInternalPurchase.sourceProducts && selectedInternalPurchase.sourceProducts.map((source, index) => (
+                      <tr key={index}>
+                        <td className="fw-semibold">{index + 1}</td>
+                        <td className="fw-semibold">{source.sourceProductName}</td>
+                        <td>
+                          <Badge bg="outline-secondary" className="text-dark">
+                            {source.sourceVariantName}
+                          </Badge>
+                        </td>
+                        <td>
+                          {source.quantityMan > 0 && `${source.quantityMan} Man`}
+                          {source.quantityMan > 0 && source.quantityKg > 0 && ' + '}
+                          {source.quantityKg > 0 && `${source.quantityKg} Kg`}
+                        </td>
+                        <td className="fw-semibold">
+                          {(source.quantityMan * MAN_WEIGHT + source.quantityKg).toFixed(2)} kg
+                        </td>
+                        <td className="text-success">PKR {source.costPerMan}</td>
+                        <td className="text-success">PKR {source.costPerKg}</td>
+                        <td className="fw-bold text-primary">
+                          PKR {((source.quantityMan * source.costPerMan) + (source.quantityKg * source.costPerKg)).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+
+              {/* Summary Card */}
+              <Card className="mt-3 bg-light">
+                <Card.Body>
+                  <Row>
+                    <Col md={6}>
+                      <div className="d-flex justify-content-between">
+                        <strong>Total Source Products:</strong>
+                        <span>{selectedInternalPurchase.sourceProducts ? selectedInternalPurchase.sourceProducts.length : 0}</span>
+                      </div>
+                      <div className="d-flex justify-content-between">
+                        <strong>Total Man Used:</strong>
+                        <span>{selectedInternalPurchase.sourceProducts ? selectedInternalPurchase.sourceProducts.reduce((total, item) => total + item.quantityMan, 0) : 0}</span>
+                      </div>
+                      <div className="d-flex justify-content-between">
+                        <strong>Total Kg Used:</strong>
+                        <span>{selectedInternalPurchase.sourceProducts ? selectedInternalPurchase.sourceProducts.reduce((total, item) => total + item.quantityKg, 0) : 0}</span>
+                      </div>
+                    </Col>
+                    <Col md={6}>
+                      <div className="d-flex justify-content-between">
+                        <strong>Total KG Equivalent:</strong>
+                        <span>{selectedInternalPurchase.sourceProducts ? selectedInternalPurchase.sourceProducts.reduce((total, item) => total + (item.quantityMan * MAN_WEIGHT + item.quantityKg), 0).toFixed(2) : 0} kg</span>
+                      </div>
+                      <div className="d-flex justify-content-between">
+                        <strong>Final Product Quantity:</strong>
+                        <span>{selectedInternalPurchase.quantityMan} Man + {selectedInternalPurchase.quantityKg} Kg</span>
+                      </div>
+                    </Col>
+                  </Row>
+                </Card.Body>
+              </Card>
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowSourceDetailsModal(false)}>
+            <i className="bi bi-x-circle me-2"></i>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Edit Internal Purchase Modal */}
+      <Modal show={showEditInternalPurchaseModal} onHide={() => setShowEditInternalPurchaseModal(false)} size="lg" centered>
+        <Modal.Header closeButton className="bg-warning text-dark">
+          <Modal.Title>
+            <i className="bi bi-pencil me-2"></i>
+            Edit Internal Purchase
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {editInternalPurchaseData && (
+            <Form>
+              <Form.Group className="mb-3">
+                <Form.Label className="fw-semibold">Product Name</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={editInternalPurchaseData.productName}
+                  onChange={(e) => setEditInternalPurchaseData({
+                    ...editInternalPurchaseData,
+                    productName: e.target.value
+                  })}
+                  size="lg"
+                />
+              </Form.Group>
+
+              <Form.Group className="mb-3">
+                <Form.Label className="fw-semibold">Variant Name</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={editInternalPurchaseData.variantName}
+                  onChange={(e) => setEditInternalPurchaseData({
+                    ...editInternalPurchaseData,
+                    variantName: e.target.value
+                  })}
+                  size="lg"
+                />
+              </Form.Group>
+
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label className="fw-semibold">Cost Price per Man (PKR)</Form.Label>
+                    <Form.Control
+                      type="number"
+                      value={editInternalPurchaseData.costPricePerMan === 0 ? '' : editInternalPurchaseData.costPricePerMan}
+                      onChange={(e) => setEditInternalPurchaseData({
+                        ...editInternalPurchaseData,
+                        costPricePerMan: Number(e.target.value) || 0
+                      })}
+                      onFocus={handlePriceInputFocus}
+                      onBlur={(e) => {
+                        if (e.target.value === '') {
+                          setEditInternalPurchaseData({
+                            ...editInternalPurchaseData,
+                            costPricePerMan: 0
+                          });
+                        }
+                      }}
+                      size="lg"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label className="fw-semibold">Cost Price per Kg (PKR)</Form.Label>
+                    <Form.Control
+                      type="number"
+                      value={editInternalPurchaseData.costPricePerKg === 0 ? '' : editInternalPurchaseData.costPricePerKg}
+                      onChange={(e) => setEditInternalPurchaseData({
+                        ...editInternalPurchaseData,
+                        costPricePerKg: Number(e.target.value) || 0
+                      })}
+                      onFocus={handlePriceInputFocus}
+                      onBlur={(e) => {
+                        if (e.target.value === '') {
+                          setEditInternalPurchaseData({
+                            ...editInternalPurchaseData,
+                            costPricePerKg: 0
+                          });
+                        }
+                      }}
+                      size="lg"
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Form.Group className="mb-3">
+                <Form.Label className="fw-semibold">Total Amount (PKR)</Form.Label>
+                <Form.Control
+                  type="number"
+                  value={editInternalPurchaseData.totalAmount === 0 ? '' : editInternalPurchaseData.totalAmount}
+                  onChange={(e) => setEditInternalPurchaseData({
+                    ...editInternalPurchaseData,
+                    totalAmount: Number(e.target.value) || 0
+                  })}
+                  onFocus={handlePriceInputFocus}
+                  onBlur={(e) => {
+                    if (e.target.value === '') {
+                      setEditInternalPurchaseData({
+                        ...editInternalPurchaseData,
+                        totalAmount: 0
+                      });
+                    }
+                  }}
+                  size="lg"
+                />
+              </Form.Group>
+
+              <Card className="border-info">
+                <Card.Header className="bg-info text-white">
+                  <h6 className="mb-0">
+                    <i className="bi bi-info-circle me-2"></i>
+                    Source Products Information
+                  </h6>
+                </Card.Header>
+                <Card.Body>
+                  <p className="text-muted mb-3">
+                    This internal purchase was created from {editInternalPurchaseData.sourceProducts?.length || 0} source products.
+                    Source product details cannot be edited here for data integrity.
+                  </p>
+                  {editInternalPurchaseData.sourceProducts && (
+                    <div className="table-responsive">
+                      <Table size="sm" bordered>
+                        <thead>
+                          <tr>
+                            <th>Source Product</th>
+                            <th>Variant</th>
+                            <th>Quantity</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {editInternalPurchaseData.sourceProducts.map((source, idx) => (
+                            <tr key={idx}>
+                              <td>{source.sourceProductName}</td>
+                              <td>{source.sourceVariantName}</td>
+                              <td>
+                                {source.quantityMan > 0 && `${source.quantityMan} Man`}
+                                {source.quantityMan > 0 && source.quantityKg > 0 && ' + '}
+                                {source.quantityKg > 0 && `${source.quantityKg} Kg`}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </Table>
                     </div>
                   )}
-                </td>
-                <td>
-                  <Badge bg="outline-secondary" className="text-dark">
-                    {sale.variantName}
-                  </Badge>
-                </td>
-                <td>
-                  {sale.quantityMan > 0 && `${sale.quantityMan} Man`}
-                  {sale.quantityMan > 0 && sale.quantityKg > 0 && ' + '}
-                  {sale.quantityKg > 0 && `${sale.quantityKg} Kg`}
-                </td>
-                <td className="fw-semibold">{sale.quantityInKg} kg</td>
-                <td className="text-success fw-semibold">
-                  PKR {sale.isInternalPurchase ? sale.costPricePerMan : sale.sellingPricePerMan}
-                </td>
-                <td className="text-success fw-semibold">
-                  PKR {sale.isInternalPurchase ? sale.costPricePerKg : sale.sellingPricePerKg}
-                </td>
-                <td className="text-success fw-semibold">
-                  PKR {sale.totalAmount.toFixed(2)}
-                </td>
-                <td>
-                  {sale.isInternalPurchase ? (
-                    <Badge bg="secondary">
-                      <i className="bi bi-dash me-1"></i>
-                      Internal
-                    </Badge>
-                  ) : (
-                    <Badge bg={sale.profit >= 0 ? "success" : "danger"}>
-                      <i className={`bi ${sale.profit >= 0 ? "bi-arrow-up" : "bi-arrow-down"} me-1`}></i>
-                      PKR {sale.profit.toFixed(2)}
-                    </Badge>
-                  )}
-                </td>
-                <td>
-                  <div className="btn-group btn-group-sm">
-                    {!sale.isInternalPurchase && (
-                      <>
-                        <Button
-                          variant="outline-primary"
-                          size="sm"
-                          onClick={() => handleEditSale(idx)}
-                        >
-                          <i className="bi bi-pencil"></i>
-                        </Button>
-                        <Button
-                          variant="outline-danger"
-                          size="sm"
-                          onClick={() => handleDeleteSale(idx)}
-                        >
-                          <i className="bi bi-trash"></i>
-                        </Button>
-                      </>
-                    )}
-                    {sale.isInternalPurchase && (
-                      <Button
-                        variant="outline-info"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedInternalPurchase(sale);
-                          setShowSourceDetailsModal(true);
-                        }}
-                        title="View Source Details"
-                      >
-                        <i className="bi bi-info-circle"></i>
-                      </Button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      </div>
-    )}
-  </Card.Body>
-</Card>
-
-{/* Source Products Details Modal */}
-<Modal show={showSourceDetailsModal} onHide={() => setShowSourceDetailsModal(false)} size="lg" centered>
-  <Modal.Header closeButton className="bg-info text-white">
-    <Modal.Title>
-      <i className="bi bi-box-seam me-2"></i>
-      Source Products Details
-    </Modal.Title>
-  </Modal.Header>
-  <Modal.Body>
-    {selectedInternalPurchase && (
-      <>
-        <Card className="mb-4 border-primary">
-          <Card.Header className="bg-primary text-white">
-            <h6 className="mb-0">
-              <i className="bi bi-info-circle me-2"></i>
-              Final Product Information
-            </h6>
-          </Card.Header>
-          <Card.Body>
-            <Row>
-              <Col md={6}>
-                <strong>Product Name:</strong> {selectedInternalPurchase.productName}
-              </Col>
-              <Col md={6}>
-                <strong>Variant:</strong> {selectedInternalPurchase.variantName}
-              </Col>
-            </Row>
-            <Row className="mt-2">
-              <Col md={6}>
-                <strong>Total Quantity:</strong> {selectedInternalPurchase.quantityMan} Man + {selectedInternalPurchase.quantityKg} Kg
-              </Col>
-              <Col md={6}>
-                <strong>Total KG:</strong> {selectedInternalPurchase.quantityInKg} kg
-              </Col>
-            </Row>
-            <Row className="mt-2">
-              <Col md={6}>
-                <strong>Total Cost:</strong> PKR {selectedInternalPurchase.totalAmount.toFixed(2)}
-              </Col>
-              <Col md={6}>
-                <strong>Date Created:</strong> {selectedInternalPurchase.date}
-              </Col>
-            </Row>
-          </Card.Body>
-        </Card>
-
-        <h6 className="fw-bold mb-3">
-          <i className="bi bi-list-check me-2 text-primary"></i>
-          Source Products Used ({selectedInternalPurchase.sourceProducts.length})
-        </h6>
-        
-        <div className="table-responsive">
-          <Table striped bordered hover>
-            <thead className="table-info">
-              <tr>
-                <th>#</th>
-                <th>Source Product</th>
-                <th>Variant</th>
-                <th>Quantity</th>
-                <th>Total KG</th>
-                <th>Cost per Man</th>
-                <th>Cost per Kg</th>
-                <th>Total Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {selectedInternalPurchase.sourceProducts.map((source, index) => (
-                <tr key={index}>
-                  <td className="fw-semibold">{index + 1}</td>
-                  <td className="fw-semibold">{source.sourceProductName}</td>
-                  <td>
-                    <Badge bg="outline-secondary" className="text-dark">
-                      {source.sourceVariantName}
-                    </Badge>
-                  </td>
-                  <td>
-                    {source.quantityMan > 0 && `${source.quantityMan} Man`}
-                    {source.quantityMan > 0 && source.quantityKg > 0 && ' + '}
-                    {source.quantityKg > 0 && `${source.quantityKg} Kg`}
-                  </td>
-                  <td className="fw-semibold">
-                    {(source.quantityMan * MAN_WEIGHT + source.quantityKg).toFixed(2)} kg
-                  </td>
-                  <td className="text-success">PKR {source.costPerMan}</td>
-                  <td className="text-success">PKR {source.costPerKg}</td>
-                  <td className="fw-bold text-primary">
-                    PKR {((source.quantityMan * source.costPerMan) + (source.quantityKg * source.costPerKg)).toFixed(2)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
-
-        {/* Summary Card */}
-        <Card className="mt-3 bg-light">
-          <Card.Body>
-            <Row>
-              <Col md={6}>
-                <div className="d-flex justify-content-between">
-                  <strong>Total Source Products:</strong>
-                  <span>{selectedInternalPurchase.sourceProducts.length}</span>
-                </div>
-                <div className="d-flex justify-content-between">
-                  <strong>Total Man Used:</strong>
-                  <span>{selectedInternalPurchase.sourceProducts.reduce((total, item) => total + item.quantityMan, 0)}</span>
-                </div>
-                <div className="d-flex justify-content-between">
-                  <strong>Total Kg Used:</strong>
-                  <span>{selectedInternalPurchase.sourceProducts.reduce((total, item) => total + item.quantityKg, 0)}</span>
-                </div>
-              </Col>
-              <Col md={6}>
-                <div className="d-flex justify-content-between">
-                  <strong>Total KG Equivalent:</strong>
-                  <span>{selectedInternalPurchase.sourceProducts.reduce((total, item) => total + (item.quantityMan * MAN_WEIGHT + item.quantityKg), 0).toFixed(2)} kg</span>
-                </div>
-                <div className="d-flex justify-content-between">
-                  <strong>Final Product Quantity:</strong>
-                  <span>{selectedInternalPurchase.quantityMan} Man + {selectedInternalPurchase.quantityKg} Kg</span>
-                </div>
-              </Col>
-            </Row>
-          </Card.Body>
-        </Card>
-      </>
-    )}
-  </Modal.Body>
-  <Modal.Footer>
-    <Button variant="secondary" onClick={() => setShowSourceDetailsModal(false)}>
-      <i className="bi bi-x-circle me-2"></i>
-      Close
-    </Button>
-  </Modal.Footer>
-</Modal>
+                </Card.Body>
+              </Card>
+            </Form>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowEditInternalPurchaseModal(false)}>
+            <i className="bi bi-x-circle me-2"></i>
+            Cancel
+          </Button>
+          <Button variant="warning" onClick={handleUpdateInternalPurchase}>
+            <i className="bi bi-check-circle me-2"></i>
+            Update Internal Purchase
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* Category Modal */}
       <Modal show={showModal} onHide={() => setShowModal(false)} size="lg" centered>
@@ -1122,7 +1502,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
           <Modal.Title>
             <i className="bi bi-grid me-2"></i>
             {selectedCategory} - Product Inventory
-            {filteredProducts.some(p => isProductLowStock(p)) && (
+            {filteredProducts && filteredProducts.some(p => isProductLowStock(p)) && (
               <Badge bg="danger" className="ms-2">
                 <i className="bi bi-exclamation-triangle me-1"></i>
                 Low Stock Items
@@ -1131,7 +1511,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {filteredProducts.length === 0 ? (
+          {!filteredProducts || filteredProducts.length === 0 ? (
             <div className="text-center py-4">
               <i className="bi bi-inbox display-4 text-muted mb-3"></i>
               <h5 className="text-muted">No products in this category</h5>
@@ -1173,7 +1553,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                       </tr>
                     </thead>
                     <tbody>
-                      {p.variants.map((v, idx) => {
+                      {p.variants && p.variants.map((v, idx) => {
                         const totalValue = v.stock * (v.pricePerKg || v.price || 0);
                         return (
                           <tr key={idx} className={isVariantLowStock(v) ? "table-warning" : ""}>
@@ -1192,7 +1572,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                             <td className="text-success fw-semibold">
                               {v.pricePerKg > 0 ? `PKR ${v.pricePerKg}` : (v.price ? `PKR ${v.price}` : '-')}
                             </td>
-                            <td className="fw-semibold">PKR {totalValue.toFixed(2)}</td>
+                            <td className="fw-semibold">PKR {(totalValue || 0).toFixed(2)}</td>
                             <td>
                               {isVariantLowStock(v) ? (
                                 <Badge bg="warning" className="text-dark">
@@ -1242,7 +1622,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {products.length === 0 ? (
+          {!products || products.length === 0 ? (
             <div className="text-center py-4">
               <i className="bi bi-inbox display-4 text-muted mb-3"></i>
               <h5 className="text-muted">No products available</h5>
@@ -1303,6 +1683,26 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                     </>
                   )}
 
+                  {/* Add warning when product not found but editing */}
+                  {editingSaleIndex !== null && !selectedProduct && (
+                    <Card className="mb-4 border-danger bg-danger bg-opacity-10">
+                      <Card.Body>
+                        <div className="d-flex justify-content-between align-items-center">
+                          <div>
+                            <h6 className="mb-1 text-danger">
+                              <i className="bi bi-exclamation-triangle me-2"></i>
+                              Product Not Found
+                            </h6>
+                            <p className="mb-0">
+                              The original product "{recentSales[editingSaleIndex]?.productName}" is no longer available in inventory.
+                              You can still update the sale record.
+                            </p>
+                          </div>
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  )}
+
                   <Row>
                     <Col md={6}>
                       <Form.Group className="mb-3">
@@ -1345,7 +1745,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                             }}
                             size="lg"
                           >
-                            {selectedProduct.variants.map((v, idx) => (
+                            {selectedProduct.variants && selectedProduct.variants.map((v, idx) => (
                               <option key={idx} value={idx}>{v.variantName}</option>
                             ))}
                           </Form.Control>
@@ -1358,15 +1758,19 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                     <>
                       <Row>
                         <Col md={6}>
+                          {/* Quantity (Man) Input */}
                           <Form.Group className="mb-3">
                             <Form.Label className="fw-semibold">Quantity (Man)</Form.Label>
                             <Form.Control
                               type="number"
-                              value={quantityMan}
+                              value={quantityMan === 0 ? '' : quantityMan}
                               min={0}
                               max={getMaxQuantityMan(selectedProduct.variants[selectedVariantIndex])}
-                              onChange={(e) => setQuantityMan(Number(e.target.value))}
+                              onChange={(e) => handleQuantityChange(e, setQuantityMan)}
+                              onFocus={handleQuantityInputFocus}
+                              onBlur={(e) => handleQuantityInputBlur(e, setQuantityMan)}
                               size="lg"
+                              placeholder="Enter man quantity"
                             />
                             <Form.Text className="text-muted">
                               Maximum: {getMaxQuantityMan(selectedProduct.variants[selectedVariantIndex])} man available
@@ -1374,15 +1778,19 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                           </Form.Group>
                         </Col>
                         <Col md={6}>
+                          {/* Quantity (Kg) Input */}
                           <Form.Group className="mb-3">
                             <Form.Label className="fw-semibold">Quantity (Kg)</Form.Label>
                             <Form.Control
                               type="number"
-                              value={quantityKg}
+                              value={quantityKg === 0 ? '' : quantityKg}
                               min={0}
                               max={getMaxQuantityKg(selectedProduct.variants[selectedVariantIndex])}
-                              onChange={(e) => setQuantityKg(Number(e.target.value))}
+                              onChange={(e) => handleQuantityChange(e, setQuantityKg)}
+                              onFocus={handleQuantityInputFocus}
+                              onBlur={(e) => handleQuantityInputBlur(e, setQuantityKg)}
                               size="lg"
+                              placeholder="Enter kg quantity"
                             />
                             <Form.Text className="text-muted">
                               Maximum: {getMaxQuantityKg(selectedProduct.variants[selectedVariantIndex])} kg total available
@@ -1397,28 +1805,14 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                             <Form.Label className="fw-semibold">Selling Price per Man (PKR)</Form.Label>
                             <Form.Control
                               type="number"
-                              value={sellingPricePerMan}
+                              value={sellingPricePerMan === 0 ? '' : sellingPricePerMan}
                               min={0}
                               step="1"
-                              onChange={(e) => {
-                                const value = parseInt(e.target.value) || 0;
-                                setSellingPricePerMan(value);
-                                // Auto-calculate price per kg only if manually entered
-                                if (value > 0 && document.activeElement === e.target) {
-                                  const calculatedPricePerKg = Math.round(value / MAN_WEIGHT);
-                                  setSellingPricePerKg(calculatedPricePerKg);
-                                }
-                              }}
-                              onBlur={(e) => {
-                                // Final calculation when user leaves the field
-                                const value = parseInt(e.target.value) || 0;
-                                if (value > 0) {
-                                  const calculatedPricePerKg = Math.round(value / MAN_WEIGHT);
-                                  setSellingPricePerKg(calculatedPricePerKg);
-                                }
-                              }}
+                              onChange={(e) => handlePriceChange(e, setSellingPricePerMan, 'manToKg')}
+                              onFocus={handlePriceInputFocus}
+                              onBlur={(e) => handlePriceInputBlur(e, setSellingPricePerMan)}
                               size="lg"
-                              placeholder="Enter whole number price"
+                              placeholder="Enter price per man"
                             />
                             <Form.Text className="text-muted">
                               Enter whole number only. Auto-calculates price per kg
@@ -1430,28 +1824,14 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                             <Form.Label className="fw-semibold">Selling Price per Kg (PKR)</Form.Label>
                             <Form.Control
                               type="number"
-                              value={sellingPricePerKg}
+                              value={sellingPricePerKg === 0 ? '' : sellingPricePerKg}
                               min={0}
                               step="1"
-                              onChange={(e) => {
-                                const value = parseInt(e.target.value) || 0;
-                                setSellingPricePerKg(value);
-                                // Auto-calculate price per man only if manually entered
-                                if (value > 0 && document.activeElement === e.target) {
-                                  const calculatedPricePerMan = Math.round(value * MAN_WEIGHT);
-                                  setSellingPricePerMan(calculatedPricePerMan);
-                                }
-                              }}
-                              onBlur={(e) => {
-                                // Final calculation when user leaves the field
-                                const value = parseInt(e.target.value) || 0;
-                                if (value > 0) {
-                                  const calculatedPricePerMan = Math.round(value * MAN_WEIGHT);
-                                  setSellingPricePerMan(calculatedPricePerMan);
-                                }
-                              }}
+                              onChange={(e) => handlePriceChange(e, setSellingPricePerKg, 'kgToMan')}
+                              onFocus={handlePriceInputFocus}
+                              onBlur={(e) => handlePriceInputBlur(e, setSellingPricePerKg)}
                               size="lg"
-                              placeholder="Enter whole number price"
+                              placeholder="Enter price per kg"
                             />
                             <Form.Text className="text-muted">
                               Enter whole number only. Auto-calculates price per man
@@ -1570,7 +1950,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                     size="lg"
                   >
                     <option value="">-- Choose Source Product --</option>
-                    {products.map(p => (
+                    {products && products.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </Form.Control>
@@ -1586,7 +1966,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                         onChange={(e) => setSelectedSourceVariantIndex(Number(e.target.value))}
                         size="lg"
                       >
-                        {selectedSourceProduct.variants.map((v, idx) => (
+                        {selectedSourceProduct.variants && selectedSourceProduct.variants.map((v, idx) => (
                           <option key={idx} value={idx}>{v.variantName}</option>
                         ))}
                       </Form.Control>
@@ -1600,7 +1980,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                             {getAvailableStockDisplay(selectedSourceProduct.variants[selectedSourceVariantIndex])}
                           </p>
                           <small className="text-muted">
-                            Price per Man: PKR {selectedSourceProduct.variants[selectedSourceVariantIndex].pricePerMan || 0} | 
+                            Price per Man: PKR {selectedSourceProduct.variants[selectedSourceVariantIndex].pricePerMan || 0} |
                             Price per Kg: PKR {selectedSourceProduct.variants[selectedSourceVariantIndex].pricePerKg || selectedSourceProduct.variants[selectedSourceVariantIndex].price || 0}
                           </small>
                         </Card.Body>
@@ -1613,11 +1993,14 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                           <Form.Label className="fw-semibold">Quantity (Man)</Form.Label>
                           <Form.Control
                             type="number"
-                            value={purchaseQuantityMan}
+                            value={purchaseQuantityMan === 0 ? '' : purchaseQuantityMan}
                             min={0}
                             max={getMaxQuantityMan(selectedSourceProduct.variants[selectedSourceVariantIndex])}
-                            onChange={(e) => setPurchaseQuantityMan(Number(e.target.value))}
+                            onChange={(e) => handleQuantityChange(e, setPurchaseQuantityMan)}
+                            onFocus={handleQuantityInputFocus}
+                            onBlur={(e) => handleQuantityInputBlur(e, setPurchaseQuantityMan)}
                             size="lg"
+                            placeholder="Enter man quantity"
                           />
                         </Form.Group>
                       </Col>
@@ -1626,11 +2009,14 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                           <Form.Label className="fw-semibold">Quantity (Kg)</Form.Label>
                           <Form.Control
                             type="number"
-                            value={purchaseQuantityKg}
+                            value={purchaseQuantityKg === 0 ? '' : purchaseQuantityKg}
                             min={0}
                             max={getMaxQuantityKg(selectedSourceProduct.variants[selectedSourceVariantIndex])}
-                            onChange={(e) => setPurchaseQuantityKg(Number(e.target.value))}
+                            onChange={(e) => handleQuantityChange(e, setPurchaseQuantityKg)}
+                            onFocus={handleQuantityInputFocus}
+                            onBlur={(e) => handleQuantityInputBlur(e, setPurchaseQuantityKg)}
                             size="lg"
+                            placeholder="Enter kg quantity"
                           />
                         </Form.Group>
                       </Col>
@@ -1638,8 +2024,8 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
 
                     {/* Add Item Button */}
                     <div className="d-grid">
-                      <Button 
-                        variant="outline-primary" 
+                      <Button
+                        variant="outline-primary"
                         size="lg"
                         onClick={handleAddItem}
                         disabled={(purchaseQuantityMan === 0 && purchaseQuantityKg === 0) || !selectedSourceProduct}
@@ -1725,10 +2111,13 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                             <Form.Label className="fw-semibold">Custom Price per Man</Form.Label>
                             <Form.Control
                               type="number"
-                              value={customPricePerMan}
-                              onChange={(e) => setCustomPricePerMan(Number(e.target.value))}
+                              value={customPricePerMan === 0 ? '' : customPricePerMan}
+                              onChange={(e) => handleCustomPriceChange(e, setCustomPricePerMan)}
+                              onFocus={handlePriceInputFocus}
+                              onBlur={(e) => handlePriceInputBlur(e, setCustomPricePerMan)}
                               size="lg"
                               min="0"
+                              placeholder="Enter custom price per man"
                             />
                           </Form.Group>
                         </Col>
@@ -1737,10 +2126,13 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                             <Form.Label className="fw-semibold">Custom Price per Kg</Form.Label>
                             <Form.Control
                               type="number"
-                              value={customPricePerKg}
-                              onChange={(e) => setCustomPricePerKg(Number(e.target.value))}
+                              value={customPricePerKg === 0 ? '' : customPricePerKg}
+                              onChange={(e) => handleCustomPriceChange(e, setCustomPricePerKg)}
+                              onFocus={handlePriceInputFocus}
+                              onBlur={(e) => handlePriceInputBlur(e, setCustomPricePerKg)}
                               size="lg"
                               min="0"
+                              placeholder="Enter custom price per kg"
                             />
                           </Form.Group>
                         </Col>
@@ -1753,7 +2145,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
           </Row>
 
           {/* Added Items Section */}
-          {storedProducts.length > 0 && (
+          {storedProducts && storedProducts.length > 0 && (
             <div className="mt-4">
               <hr />
               <div className="d-flex justify-content-between align-items-center mb-3">
@@ -1762,9 +2154,9 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                   Purchase Items ({storedProducts.length})
                 </h6>
                 <div>
-                  <Button 
-                    variant="outline-danger" 
-                    size="sm" 
+                  <Button
+                    variant="outline-danger"
+                    size="sm"
                     onClick={handleClearAllItems}
                     className="me-2"
                   >
@@ -1773,7 +2165,7 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
                   </Button>
                 </div>
               </div>
-              
+
               <div className="table-responsive">
                 <Table striped bordered hover size="sm">
                   <thead className="table-primary">
@@ -1880,11 +2272,11 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
 
               {/* Create Final Product Button */}
               <div className="d-grid mt-3">
-                <Button 
-                  variant="success" 
+                <Button
+                  variant="success"
                   size="lg"
                   onClick={handleCreateFinalProduct}
-                  disabled={!newProductName || !newProductCategory || storedProducts.length === 0}
+                  disabled={!newProductName || !newProductCategory || !storedProducts || storedProducts.length === 0}
                 >
                   <i className="bi bi-check-circle me-2"></i>
                   Create Final Product from {storedProducts.length} Source{storedProducts.length > 1 ? 's' : ''}
@@ -1898,9 +2290,9 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
             <i className="bi bi-x-circle me-2"></i>
             Cancel
           </Button>
-          {storedProducts.length > 0 && (
-            <Button 
-              variant="success" 
+          {storedProducts && storedProducts.length > 0 && (
+            <Button
+              variant="success"
               onClick={handleCreateFinalProduct}
               disabled={!newProductName || !newProductCategory}
             >
@@ -1945,16 +2337,29 @@ const [selectedInternalPurchase, setSelectedInternalPurchase] = useState(null);
         <Modal.Header closeButton className="bg-danger text-white">
           <Modal.Title>
             <i className="bi bi-trash me-2"></i>
-            Delete Sale Record
+            Delete Record
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <div className="text-center mb-4">
             <i className="bi bi-exclamation-triangle display-4 text-danger"></i>
           </div>
-          <h5 className="text-center mb-3">Delete this sale record?</h5>
-          <p className="text-center text-muted">
-            This action cannot be undone. Stock levels will be restored to their previous state.
+          <h5 className="text-center mb-3">
+            Delete this {recentSales[deleteSaleIndex]?.isInternalPurchase ? 'internal purchase' : 'sale'} record?
+          </h5>
+          {recentSales[deleteSaleIndex]?.isInternalPurchase ? (
+            <div className="alert alert-warning">
+              <i className="bi bi-exclamation-triangle me-2"></i>
+              <strong>Warning:</strong> This will delete the final product and restore stock to all source products.
+            </div>
+          ) : (
+            <div className="alert alert-info">
+              <i className="bi bi-info-circle me-2"></i>
+              Stock levels will be restored to their previous state.
+            </div>
+          )}
+          <p className="text-center text-muted mb-0">
+            This action cannot be undone.
           </p>
         </Modal.Body>
         <Modal.Footer>

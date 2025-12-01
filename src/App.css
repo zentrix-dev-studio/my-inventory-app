@@ -13,6 +13,10 @@ body,
   padding: 0;
 }
 
+.bg-primary{
+  background: linear-gradient(45deg, #000, #1c1d1f) !important;  
+}
+
 /* ==============================
    GLOBAL
 ============================== */
@@ -57,7 +61,7 @@ h2 {
    NAVBAR
 ============================== */
 .custom-navbar {
-  background: linear-gradient(90deg, #007bff, #6610f2);
+  background: linear-gradient(45deg, #000, #1c1d1f);  
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
@@ -85,10 +89,8 @@ h2 {
 .sidebar {
   width: 220px;
   height: 100vh;
-  background-color: #1f1f1f;
-  color: #fff;
-  padding: 25px 20px;
-  position: fixed;
+background: linear-gradient(45deg, #000, #1c1d1f);
+  /* position: fixed; */
   left: 0;
   top: 0;
   display: flex;
@@ -124,10 +126,10 @@ h2 {
 
 /* Active Link Highlight */
 .sidebar-link.active {
-  background: #0d6efd;
+  background: #2f3844;
   color: #fff !important;
   font-weight: 600;
-  box-shadow: 0 0 8px rgba(13, 110, 253, 0.6);
+  box-shadow: 0 0 8px rgba(50, 50, 56, 0.6);
 }
 
 /* ==============================

@@ -2,8 +2,9 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Dashboard from "../src/components/pages/Dashboard";
 import Products from "../src/components/pages/Products";
-import AddProduct from "../src/components/pages/AddProduct";
-import EditProduct from "../src/components/pages/EditProduct";
+import KhataSystem from "./components/Khata/KhataSystem";
+import SalesKhata from "./components/Khata/SalesKhata/SalesKhata";
+import PurchaseKhata from "./components/Khata/PurchaseKhata/PurchaseKhata";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import Sidebar from "./components/Sidebar";
@@ -23,8 +24,9 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/products" element={<Products />} />
-              <Route path="/add-product" element={<AddProduct />} />
-              <Route path="/edit-product/:id" element={<EditProduct />} />
+              <Route path="/khata" element={<KhataSystem />} />
+              <Route path="/sales" element={<SalesKhata />} />
+              <Route path="/purchase" element={<PurchaseKhata />} />
             </Routes>
           </div>
 

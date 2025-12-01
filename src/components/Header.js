@@ -13,7 +13,7 @@ const Header = () => {
           <Nav className="ms-auto">
             <Nav.Link as={Link} to="/"><FaHome /> Dashboard</Nav.Link>
             <Nav.Link as={Link} to="/products"><FaBoxOpen /> Products</Nav.Link>
-            <Nav.Link as={Link} to="/add-product"><FaPlusCircle /> Add Product</Nav.Link>
+            <Nav.Link as={Link} to="/khata"><FaPlusCircle /> Khata</Nav.Link>
           </Nav>
         </Navbar.Collapse>
       </Container>
